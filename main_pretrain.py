@@ -28,9 +28,11 @@ assert timm.__version__ == "0.3.2"  # version check
 import timm.optim.optim_factory as optim_factory
 
 import util.misc as misc
+from util.datasets import build_dataset
 from util.misc import NativeScalerWithGradNormCount as NativeScaler
 
-import models_mae
+# import models_mae
+import models_mae_3d as models_mae
 
 from engine_pretrain import train_one_epoch
 
@@ -101,6 +103,13 @@ def get_args_parser():
     parser.add_argument('--dist_url', default='env://',
                         help='url used to set up distributed training')
 
+    # My arguments
+    parser.add_argument("-d", "--datasource",
+                        help="Name of the available datasets",
+                        choices=["imagenet", "imagenet_limit", "lung"])
+    parser.add_argument('--num_tr', default=100, type=int)
+    parser.add_argument('--num_val', default=300, type=int)
+
     return parser
 
 
@@ -119,14 +128,16 @@ def main(args):
 
     cudnn.benchmark = True
 
-    # simple augmentation
-    transform_train = transforms.Compose([
-            transforms.RandomResizedCrop(args.input_size, scale=(0.2, 1.0), interpolation=3),  # 3 is bicubic
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
-    dataset_train = datasets.ImageFolder(os.path.join(args.data_path, 'train'), transform=transform_train)
-    print(dataset_train)
+    # # simple augmentation
+    # transform_train = transforms.Compose([
+    #         transforms.RandomResizedCrop(args.input_size, scale=(0.2, 1.0), interpolation=3),  # 3 is bicubic
+    #         transforms.RandomHorizontalFlip(),
+    #         transforms.ToTensor(),
+    #         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
+    # dataset_train = datasets.ImageFolder(os.path.join(args.data_path, 'train'), transform=transform_train)
+    # print(dataset_train)
+
+    dataset_train = build_dataset(is_train=True, args=args)
 
     if True:  # args.distributed:
         num_tasks = misc.get_world_size()
@@ -153,7 +164,8 @@ def main(args):
     )
     
     # define the model
-    model = models_mae.__dict__[args.model](norm_pix_loss=args.norm_pix_loss)
+    in_chans = 1 if args.datasource == "lung" else 3
+    model = models_mae.__dict__[args.model](norm_pix_loss=args.norm_pix_loss, img_size=args.input_size, in_chans=in_chans)
 
     model.to(device)
 
@@ -194,7 +206,7 @@ def main(args):
             log_writer=log_writer,
             args=args
         )
-        if args.output_dir and (epoch % 20 == 0 or epoch + 1 == args.epochs):
+        if args.output_dir and (epoch % 100 == 0 or epoch + 1 == args.epochs):
             misc.save_model(
                 args=args, model=model, model_without_ddp=model_without_ddp, optimizer=optimizer,
                 loss_scaler=loss_scaler, epoch=epoch)

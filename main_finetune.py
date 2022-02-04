@@ -34,7 +34,8 @@ from util.datasets import build_dataset
 from util.pos_embed import interpolate_pos_embed
 from util.misc import NativeScalerWithGradNormCount as NativeScaler
 
-import models_vit
+# import models_vit
+import models_vit_3d as models_vit
 
 from engine_finetune import train_one_epoch, evaluate
 
@@ -152,6 +153,13 @@ def get_args_parser():
     parser.add_argument('--dist_url', default='env://',
                         help='url used to set up distributed training')
 
+    # My arguments
+    parser.add_argument("-d", "--datasource",
+                        help="Name of the available datasets",
+                        choices=["imagenet", "imagenet_limit", "luna_nodule", "methodist_nodule"])
+    parser.add_argument('--num_tr', default=100, type=int)
+    parser.add_argument('--num_val', default=300, type=int)
+
     return parser
 
 
@@ -223,11 +231,14 @@ def main(args):
             mixup_alpha=args.mixup, cutmix_alpha=args.cutmix, cutmix_minmax=args.cutmix_minmax,
             prob=args.mixup_prob, switch_prob=args.mixup_switch_prob, mode=args.mixup_mode,
             label_smoothing=args.smoothing, num_classes=args.nb_classes)
-    
+
+    in_chans = 1 if "nodule" in args.datasource else 3
     model = models_vit.__dict__[args.model](
         num_classes=args.nb_classes,
         drop_path_rate=args.drop_path,
         global_pool=args.global_pool,
+        img_size=args.input_size,
+        in_chans=in_chans
     )
 
     if args.finetune and not args.eval:
@@ -317,7 +328,8 @@ def main(args):
             log_writer=log_writer,
             args=args
         )
-        if args.output_dir:
+        # if args.output_dir:
+        if args.output_dir and (epoch % 50 == 0 or epoch + 1 == args.epochs):
             misc.save_model(
                 args=args, model=model, model_without_ddp=model_without_ddp, optimizer=optimizer,
                 loss_scaler=loss_scaler, epoch=epoch)

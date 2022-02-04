@@ -8,6 +8,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from PIL import Image
 
+# import models_mae_3d as models_mae
 import models_mae
 
 # define the utils
@@ -81,6 +82,7 @@ def run_one_image(img, model):
 # load an image
 img_url = 'https://user-images.githubusercontent.com/11435359/147738734-196fd92f-9260-48d5-ba7e-bf103d29364d.jpg' # fox, from ILSVRC2012_val_00046145
 # img_url = 'https://user-images.githubusercontent.com/11435359/147743081-0428eecf-89e5-4e07-8da5-a30fd73cc0ba.jpg' # cucumber, from ILSVRC2012_val_00047851
+
 img = Image.open(requests.get(img_url, stream=True).raw)
 img = img.resize((224, 224))
 img = np.array(img) / 255.

@@ -32,8 +32,8 @@ def parse_args():
 
 def get_shared_folder() -> Path:
     user = os.getenv("USER")
-    if Path("/checkpoint/").is_dir():
-        p = Path(f"/checkpoint/{user}/experiments")
+    if Path("/home/pyuan2/Projects2021/mae/checkpoint/").is_dir():
+        p = Path(f"/home/pyuan2/Projects2021/mae/checkpoint/{user}/experiments")
         p.mkdir(exist_ok=True)
         return p
     raise RuntimeError("No shared folder available")
@@ -103,10 +103,10 @@ def main():
         kwargs['slurm_comment'] = args.comment
 
     executor.update_parameters(
-        mem_gb=40 * num_gpus_per_node,
+        mem_gb=30 * num_gpus_per_node,
         gpus_per_node=num_gpus_per_node,
         tasks_per_node=num_gpus_per_node, # one task per GPU
-        cpus_per_task=10,
+        cpus_per_task=5,
         nodes=nodes,
         timeout_min=timeout_min,
         # Below are cluster dependent parameters

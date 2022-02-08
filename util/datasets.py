@@ -36,7 +36,7 @@ def init_lung():
 
 def init_luna_nodule(is_train):
     from .datasets_lung import Luna_nodule
-    root_dir = "./LUNA16/cls/crop_v5"
+    root_dir = "./LUNA16/cls/crop_v6"
     label_path = "./LUNA16/cls/annotationdetclsconvfnl_v3.csv"
     split = "trainVal" if is_train else "test"
     dataset = Luna_nodule(root_dir, label_path, split)
@@ -50,14 +50,10 @@ def init_meth_nodule(is_train):
     dataset = Methodist_nodule(root_dir, label_path, split)
     return dataset
 
-def build_dataset(is_train, args):
-    # transform = build_transform(is_train, args)
+def build_dataset(is_train, transform=None, args=None):
 
-    transform = transforms.Compose([
-            transforms.RandomResizedCrop(args.input_size, scale=(0.2, 1.0), interpolation=3),  # 3 is bicubic
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
+    if transform is None:
+        transform = build_transform(is_train, args)
 
     if args.datasource == "imagenet":
         dataset = init_imagenet(is_train, args.data_path, transform)

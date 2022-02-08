@@ -113,6 +113,76 @@ def get_args_parser():
     return parser
 
 
+def single_image():
+    import requests
+    from PIL import Image
+    img_url = 'https://user-images.githubusercontent.com/11435359/147738734-196fd92f-9260-48d5-ba7e-bf103d29364d.jpg'  # fox, from ILSVRC2012_val_00046145
+    # img_url = 'https://user-images.githubusercontent.com/11435359/147743081-0428eecf-89e5-4e07-8da5-a30fd73cc0ba.jpg' # cucumber, from ILSVRC2012_val_00047851
+
+    img = Image.open(requests.get(img_url, stream=True).raw)
+    img = img.resize((224, 224))
+    img = np.array(img) / 255.
+
+    imagenet_mean = np.array([0.485, 0.456, 0.406])
+    imagenet_std = np.array([0.229, 0.224, 0.225])
+
+    assert img.shape == (224, 224, 3)
+
+    # normalize by ImageNet mean and std
+    img = img - imagenet_mean
+    img = img / imagenet_std
+    img = img.astype(np.float16)
+
+    x = torch.tensor(img)
+
+    # make it a batch-like
+    x = x.unsqueeze(dim=0)
+    x = torch.einsum('nhwc->nchw', x)
+
+    return x
+
+def single_lung():
+    scan_path = "LUNA16/cls/crop_v6/1.3.6.1.4.1.14519.5.2.1.6279.6001.108231420525711026834210228428-951.npy"
+    # scan_path = "LUNA16/cls/crop_v6/1.3.6.1.4.1.14519.5.2.1.6279.6001.100953483028192176989979435275-171.npy"
+    img = np.load(scan_path)
+    img = np.array(img) / 255.
+
+    imagenet_mean = np.average(np.array([0.485, 0.456, 0.406]))
+    imagenet_std = np.average(np.array([0.229, 0.224, 0.225]))
+
+    assert img.shape == (32, 32, 32)
+
+    # normalize by ImageNet mean and std
+    img = img - imagenet_mean
+    img = img / imagenet_std
+    img = img.astype(np.float16)
+
+    x = torch.tensor(img)
+
+    # make it a batch-like
+    x = x.unsqueeze(dim=0)  # channel
+    x = x.unsqueeze(dim=0)  # batch
+    # x = torch.einsum('nhwc->nchw', x)
+
+    return x
+
+class simple_iterator:
+    def __init__(self, img_list):
+        self.img_list = img_list
+        self.current = -1
+
+    def __len__(self):
+        return len(self.img_list)
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        self.current += 1
+        if self.current < len(self.img_list):
+            return self.img_list[self.current], None
+        raise StopIteration
+
 def main(args):
     misc.init_distributed_mode(args)
 
@@ -137,17 +207,17 @@ def main(args):
     # dataset_train = datasets.ImageFolder(os.path.join(args.data_path, 'train'), transform=transform_train)
     # print(dataset_train)
 
-    dataset_train = build_dataset(is_train=True, args=args)
-
+    # dataset_train = build_dataset(is_train=True, args=args)
+    #
     if True:  # args.distributed:
         num_tasks = misc.get_world_size()
         global_rank = misc.get_rank()
-        sampler_train = torch.utils.data.DistributedSampler(
-            dataset_train, num_replicas=num_tasks, rank=global_rank, shuffle=True
-        )
-        print("Sampler_train = %s" % str(sampler_train))
-    else:
-        sampler_train = torch.utils.data.RandomSampler(dataset_train)
+    #     sampler_train = torch.utils.data.DistributedSampler(
+    #         dataset_train, num_replicas=num_tasks, rank=global_rank, shuffle=True
+    #     )
+    #     print("Sampler_train = %s" % str(sampler_train))
+    # else:
+    #     sampler_train = torch.utils.data.RandomSampler(dataset_train)
 
     if global_rank == 0 and args.log_dir is not None:
         os.makedirs(args.log_dir, exist_ok=True)
@@ -155,13 +225,13 @@ def main(args):
     else:
         log_writer = None
 
-    data_loader_train = torch.utils.data.DataLoader(
-        dataset_train, sampler=sampler_train,
-        batch_size=args.batch_size,
-        num_workers=args.num_workers,
-        pin_memory=args.pin_mem,
-        drop_last=True,
-    )
+    # data_loader_train = torch.utils.data.DataLoader(
+    #     dataset_train, sampler=sampler_train,
+    #     batch_size=args.batch_size,
+    #     num_workers=args.num_workers,
+    #     pin_memory=args.pin_mem,
+    #     drop_last=True,
+    # )
     
     # define the model
     in_chans = 1 if args.datasource == "lung" else 3
@@ -193,15 +263,19 @@ def main(args):
     print(optimizer)
     loss_scaler = NativeScaler()
 
-    misc.load_model(args=args, model_without_ddp=model_without_ddp, optimizer=optimizer, loss_scaler=loss_scaler)
+    misc.load_model(args=args, model_without_ddp=model_without_ddp, optimizer=optimizer, loss_scaler=loss_scaler, start_over=True)
 
     print(f"Start training for {args.epochs} epochs")
     start_time = time.time()
+
+    # img = single_image()
+    img = single_lung()
     for epoch in range(args.start_epoch, args.epochs):
-        if args.distributed:
-            data_loader_train.sampler.set_epoch(epoch)
+        # if args.distributed:
+        #     data_loader_train.sampler.set_epoch(epoch)
+        data_loader_train_single = simple_iterator((img,))
         train_stats = train_one_epoch(
-            model, data_loader_train,
+            model, data_loader_train_single,
             optimizer, device, epoch, loss_scaler,
             log_writer=log_writer,
             args=args

@@ -29,6 +29,7 @@ assert timm.__version__ == "0.3.2" # version check
 from timm.models.layers import trunc_normal_
 
 import util.misc as misc
+from util.datasets import build_dataset
 from util.pos_embed import interpolate_pos_embed
 from util.misc import NativeScalerWithGradNormCount as NativeScaler
 from util.lars import LARS
@@ -110,6 +111,13 @@ def get_args_parser():
     parser.add_argument('--dist_url', default='env://',
                         help='url used to set up distributed training')
 
+    # My arguments
+    parser.add_argument("-d", "--datasource",
+                        help="Name of the available datasets",
+                        choices=["imagenet", "imagenet_limit", "lung", "luna_nodule", "methodist_nodule"])
+    parser.add_argument('--num_tr', default=100, type=int)
+    parser.add_argument('--num_val', default=300, type=int)
+
     return parser
 
 
@@ -139,8 +147,10 @@ def main(args):
             transforms.CenterCrop(224),
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
-    dataset_train = datasets.ImageFolder(os.path.join(args.data_path, 'train'), transform=transform_train)
-    dataset_val = datasets.ImageFolder(os.path.join(args.data_path, 'val'), transform=transform_val)
+
+    dataset_train = build_dataset(is_train=True, transform=transform_train, args=args)
+    dataset_val = build_dataset(is_train=False, transform=transform_val, args=args)
+
     print(dataset_train)
     print(dataset_val)
 

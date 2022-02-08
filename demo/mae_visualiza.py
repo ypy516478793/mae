@@ -22,6 +22,7 @@ def show_image(image, title=''):
     assert image.shape[2] == 3
     plt.imshow(torch.clip((image * imagenet_std + imagenet_mean) * 255, 0, 255).int())
     plt.title(title, fontsize=16)
+    plt.tight_layout()
     plt.axis('off')
     return
 
@@ -93,7 +94,8 @@ assert img.shape == (224, 224, 3)
 img = img - imagenet_mean
 img = img / imagenet_std
 
-plt.rcParams['figure.figsize'] = [5, 5]
+# plt.rcParams['figure.figsize'] = [5, 5]
+plt.figure(figsize=(12, 5))
 show_image(torch.tensor(img))
 
 # This is an MAE model trained with pixels as targets for visualization (ViT-Large, training mask ratio=0.75)
@@ -101,7 +103,12 @@ show_image(torch.tensor(img))
 
 
 # chkpt_dir = '../mae_pretrain_vit_large.pth'
-chkpt_dir = '../mae_visualize_vit_large.pth'
+# chkpt_dir = '../mae_visualize_vit_large.pth'
+# chkpt_dir = '../jobdir/pretrain_imagenet_single/vit_large_patch16_e800_ft100/checkpoint-99.pth'
+# chkpt_dir = '../jobdir/pretrain_imagenet_single/vit_large_patch16_e800_ft100_blr5e2/checkpoint-99.pth'
+# chkpt_dir = '../jobdir/pretrain_imagenet_single/vit_large_patch16_e800_ft100_blr5/checkpoint-99.pth'
+# chkpt_dir = '../jobdir/pretrain_imagenet_single/vit_large_patch16_e800_ft100_blr5_wu0/checkpoint-99.pth'
+chkpt_dir = '../jobdir/pretrain_imagenet_single/vit_large_patch16_e800_ft100_blr5e2_wu0/checkpoint-99.pth'
 model_mae = prepare_model(chkpt_dir, 'mae_vit_large_patch16')
 print('Model loaded.')
 

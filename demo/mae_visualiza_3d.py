@@ -97,7 +97,10 @@ def run_one_image(img, model, mr=0.75):
 img_url = 'https://user-images.githubusercontent.com/11435359/147738734-196fd92f-9260-48d5-ba7e-bf103d29364d.jpg' # fox, from ILSVRC2012_val_00046145
 # img_url = 'https://user-images.githubusercontent.com/11435359/147743081-0428eecf-89e5-4e07-8da5-a30fd73cc0ba.jpg' # cucumber, from ILSVRC2012_val_00047851
 
-scan_path = "../LUNA16/cls/crop_v5/1.3.6.1.4.1.14519.5.2.1.6279.6001.100225287222365663678666836860-111.npy"
+# scan_path = "../LUNA16/cls/crop_v5/1.3.6.1.4.1.14519.5.2.1.6279.6001.100225287222365663678666836860-111.npy"
+# scan_path = "../LUNA16/cls/crop_v6/1.3.6.1.4.1.14519.5.2.1.6279.6001.100225287222365663678666836860-111.npy"
+scan_path = "../LUNA16/cls/crop_v6/1.3.6.1.4.1.14519.5.2.1.6279.6001.108231420525711026834210228428-951.npy"
+# scan_path = "../LUNA16/cls/crop_v6/1.3.6.1.4.1.14519.5.2.1.6279.6001.100953483028192176989979435275-171.npy"
 img = np.load(scan_path)
 img = np.array(img) / 255.
 
@@ -119,14 +122,18 @@ show_image(torch.tensor(img))
 # This is an MAE model trained with pixels as targets for visualization (ViT-Large, training mask ratio=0.75)
 
 
-mr = 0.8
+mr = 0.75
 # chkpt_dir = '../mae_pretrain_vit_large.pth'
-# chkpt_dir = '../jobdir/pretrain/vit_large_patch16_e800_crop32_lung/checkpoint-799.pth'
-# chkpt_dir = '../jobdir/pretrain/vit_large_patch16_e800_crop32_lung_mr5/checkpoint-600.pth'
-# chkpt_dir = '../jobdir/pretrain/vit_large_patch16_e800_crop32_lung_mr6/checkpoint-600.pth'
-# chkpt_dir = '../jobdir/pretrain/vit_large_patch16_e800_crop32_lung_mr7/checkpoint-600.pth'
-chkpt_dir = '../jobdir/pretrain/vit_large_patch16_e800_crop32_lung_mr8/checkpoint-700.pth'
+chkpt_dir = '../jobdir/pretrain_lung_single/vit_large_patch16_e800_ft100_blr5e2_wu40/checkpoint-99.pth'
+# chkpt_dir = '../jobdir/pretrain_lung/vit_large_patch4_e800_input32_luna_mr75/checkpoint-799.pth'
+# chkpt_dir = '../jobdir/pretrain_lung/vit_large_patch16_e800_crop32_lung/checkpoint-799.pth'
+# chkpt_dir = '../jobdir/pretrain_lung/vit_large_patch16_e800_crop32_lung_mr5/checkpoint-600.pth'
+# chkpt_dir = '../jobdir/pretrain_lung/vit_large_patch16_e800_crop32_lung_mr6/checkpoint-600.pth'
+# chkpt_dir = '../jobdir/pretrain_lung/vit_large_patch16_e800_crop32_lung_mr7/checkpoint-600.pth'
+# chkpt_dir = '../jobdir/pretrain_lung/vit_large_patch16_e800_crop32_lung_mr8/checkpoint-700.pth'
+
 model_mae = prepare_model(chkpt_dir, 'mae_vit_large_patch16')
+# model_mae = prepare_model(chkpt_dir, 'mae_vit_large_patch4')
 print('Model loaded.')
 
 # make random mask reproducible (comment out to make it change)

@@ -46,6 +46,7 @@ def run_one_image(img, model):
 
     # run MAE
     loss, y, mask = model(x.float(), mask_ratio=0.75)
+    print("loss is: ", loss)
     y = model.unpatchify(y)
     y = torch.einsum('nchw->nhwc', y).detach().cpu()
 
@@ -103,16 +104,16 @@ show_image(torch.tensor(img))
 
 
 # chkpt_dir = '../mae_pretrain_vit_large.pth'
-# chkpt_dir = '../mae_visualize_vit_large.pth'
+chkpt_dir = '../mae_visualize_vit_large.pth'
 # chkpt_dir = '../jobdir/pretrain_imagenet_single/vit_large_patch16_e800_ft100/checkpoint-99.pth'
 # chkpt_dir = '../jobdir/pretrain_imagenet_single/vit_large_patch16_e800_ft100_blr5e2/checkpoint-99.pth'
 # chkpt_dir = '../jobdir/pretrain_imagenet_single/vit_large_patch16_e800_ft100_blr5/checkpoint-99.pth'
 # chkpt_dir = '../jobdir/pretrain_imagenet_single/vit_large_patch16_e800_ft100_blr5_wu0/checkpoint-99.pth'
-chkpt_dir = '../jobdir/pretrain_imagenet_single/vit_large_patch16_e800_ft100_blr5e2_wu0/checkpoint-99.pth'
+# chkpt_dir = '../jobdir/pretrain_imagenet_single/vit_large_patch16_e800_ft100_blr5e2_wu0/checkpoint-99.pth'
 model_mae = prepare_model(chkpt_dir, 'mae_vit_large_patch16')
 print('Model loaded.')
 
 # make random mask reproducible (comment out to make it change)
-torch.manual_seed(2)
+# torch.manual_seed(2)
 print('MAE with pixel reconstruction:')
 run_one_image(img, model_mae)

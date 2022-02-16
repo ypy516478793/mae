@@ -39,7 +39,7 @@ import models_mae
 # import models_vit
 import models_vit_with_feature as models_vit
 
-from engine_pretrain_meta import train_one_epoch_meta, evaluate
+from engine_pretrain_meta import train_one_epoch_meta,train_one_epoch_meta_with_features, evaluate, evaluate_with_features
 from copy import deepcopy
 
 def get_args_parser():
@@ -136,7 +136,7 @@ def get_args_parser():
     # My arguments
     parser.add_argument("-d", "--datasource",
                         help="Name of the available datasets",
-                        choices=["imagenet", "imagenet_limit", "lung"])
+                        choices=["imagenet", "imagenet_limit", "imagenet_limit_with_name", "lung"])
     parser.add_argument('--num_tr', default=100, type=int)
     parser.add_argument('--num_val', default=300, type=int)
 
@@ -229,18 +229,18 @@ def main(args):
     cudnn.benchmark = True
 
     # simple augmentation
-    transform_train = transforms.Compose([
-            transforms.RandomResizedCrop(args.input_size, scale=(0.2, 1.0), interpolation=3),  # 3 is bicubic
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
+    # transform_train = transforms.Compose([
+    #         transforms.RandomResizedCrop(args.input_size, scale=(0.2, 1.0), interpolation=3),  # 3 is bicubic
+    #         transforms.RandomHorizontalFlip(),
+    #         transforms.ToTensor(),
+    #         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
     transform_val = transforms.Compose([
             transforms.Resize(256, interpolation=3),
             transforms.CenterCrop(224),
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
     # dataset_train = datasets.ImageFolder(os.path.join(args.data_path, 'train'), transform=transform_train)
-    dataset_train = build_dataset(is_train=True, transform=transform_train, args=args)
+    dataset_train = build_dataset(is_train=True, transform=transform_val, args=args)
     dataset_val = build_dataset(is_train=False, transform=transform_val, args=args)
     # print(dataset_train)
 
@@ -277,7 +277,7 @@ def main(args):
         batch_size=args.batch_size,
         num_workers=args.num_workers,
         pin_memory=args.pin_mem,
-        drop_last=True,
+        drop_last=False,
     )
 
     data_loader_val = torch.utils.data.DataLoader(
@@ -317,8 +317,8 @@ def main(args):
 
     # for linear prob only
     # hack: revise model's head with BN
-    model_cls.head = torch.nn.Sequential(torch.nn.BatchNorm1d(
-        model_cls.head.in_features, affine=False, eps=1e-6), model_cls.head)
+    # model_cls.head = torch.nn.Sequential(torch.nn.BatchNorm1d(
+    #     model_cls.head.in_features, affine=False, eps=1e-6), model_cls.head)
 
     # freeze all but the head
     for _, p in model_cls.named_parameters():
@@ -381,7 +381,7 @@ def main(args):
     for epoch in range(args.start_epoch, args.epochs):
         if args.distributed:
             data_loader_train.sampler.set_epoch(epoch)
-        train_stats = train_one_epoch_meta(
+        train_stats = train_one_epoch_meta_with_features(
             model, model_cls,
             criterion, data_loader_train,
             optimizer, optimizer_cls,
@@ -396,7 +396,7 @@ def main(args):
                 args=args, model=model, model_without_ddp=model_without_ddp, optimizer=optimizer,
                 loss_scaler=loss_scaler, epoch=epoch)
 
-        test_stats = evaluate(data_loader_val, model, model_cls, optimizer, device, epoch,
+        test_stats = evaluate_with_features(data_loader_val, model, model_cls, optimizer, device, epoch,
                               loss_scaler, log_writer=log_writer, args=args)
         print(f"Accuracy of the network on the {len(dataset_val)} test images: {test_stats['acc1']:.1f}%")
         max_accuracy = max(max_accuracy, test_stats["acc1"])

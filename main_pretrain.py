@@ -32,7 +32,7 @@ from util.datasets import build_dataset
 from util.misc import NativeScalerWithGradNormCount as NativeScaler
 
 # import models_mae
-import models_mae_3d as models_mae
+
 
 from engine_pretrain import train_one_epoch
 
@@ -76,7 +76,8 @@ def get_args_parser():
     # Dataset parameters
     parser.add_argument('--data_path', default='/datasets01/imagenet_full_size/061417/', type=str,
                         help='dataset path')
-
+    parser.add_argument('--nb_classes', default=1000, type=int,
+                        help='number of the classification types')
     parser.add_argument('--output_dir', default='./output_dir',
                         help='path where to save, empty for no saving')
     parser.add_argument('--log_dir', default='./output_dir',
@@ -106,7 +107,7 @@ def get_args_parser():
     # My arguments
     parser.add_argument("-d", "--datasource",
                         help="Name of the available datasets",
-                        choices=["imagenet", "imagenet_limit", "lung"])
+                        choices=["imagenet", "imagenet_limit", "lung", "lung_nodule"])
     parser.add_argument('--num_tr', default=100, type=int)
     parser.add_argument('--num_val', default=300, type=int)
 
@@ -169,7 +170,12 @@ def main(args):
     )
     
     # define the model
-    in_chans = 1 if args.datasource == "lung" else 3
+    if "lung" in args.datasource:
+        import models_mae_3d as models_mae
+        in_chans = 1
+    else:
+        import models_mae
+        in_chans = 3
     model = models_mae.__dict__[args.model](norm_pix_loss=args.norm_pix_loss, img_size=args.input_size, in_chans=in_chans)
 
     model.to(device)
@@ -198,7 +204,7 @@ def main(args):
     print(optimizer)
     loss_scaler = NativeScaler()
 
-    misc.load_model(args=args, model_without_ddp=model_without_ddp, optimizer=optimizer, loss_scaler=loss_scaler)
+    misc.load_model(args=args, model_without_ddp=model_without_ddp, optimizer=optimizer, loss_scaler=loss_scaler, start_over=True)
 
     print(f"Start training for {args.epochs} epochs")
     start_time = time.time()
@@ -211,7 +217,7 @@ def main(args):
             log_writer=log_writer,
             args=args
         )
-        if args.output_dir and (epoch % 100 == 0 or epoch + 1 == args.epochs):
+        if args.output_dir and (epoch % 10 == 0 or epoch + 1 == args.epochs):
             misc.save_model(
                 args=args, model=model, model_without_ddp=model_without_ddp, optimizer=optimizer,
                 loss_scaler=loss_scaler, epoch=epoch)

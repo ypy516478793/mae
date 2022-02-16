@@ -14,6 +14,7 @@ import sys
 from typing import Iterable, Optional
 
 import torch
+import os
 
 from timm.data import Mixup
 from timm.utils import accuracy
@@ -128,5 +129,164 @@ def evaluate(data_loader, model, device):
     metric_logger.synchronize_between_processes()
     print('* Acc@1 {top1.global_avg:.3f} Acc@5 {top5.global_avg:.3f} loss {losses.global_avg:.3f}'
           .format(top1=metric_logger.acc1, top5=metric_logger.acc5, losses=metric_logger.loss))
+
+    return {k: meter.global_avg for k, meter in metric_logger.meters.items()}
+
+
+@torch.no_grad()
+def evaluate_with_features(data_loader, model, device, log_writer, feature_dir, is_train=True):
+    criterion = torch.nn.CrossEntropyLoss()
+
+    metric_logger = misc.MetricLogger(delimiter="  ")
+    header = 'Test:'
+
+    all_features = []
+    all_labels = []
+    all_images = []
+
+    # switch to evaluation mode
+    model.eval()
+
+    for batch in metric_logger.log_every(data_loader, 10, header):
+        image_paths = batch[0]
+        images = batch[1]
+        target = batch[-1]
+        images = images.to(device, non_blocking=True)
+        target = target.to(device, non_blocking=True)
+
+        # compute output
+        with torch.cuda.amp.autocast():
+            features, output = model(images)
+            loss = criterion(output, target)
+
+        # embedding visualization
+        if log_writer is not None:
+            imagenet_mean = torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1)
+            imagenet_std = torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1)
+            images = images.cpu()
+            images = torch.clip((images * imagenet_std + imagenet_mean) * 255, 0, 255) / 255
+            all_features.append(features.cpu())
+            all_labels.append(target.cpu())
+            all_images.append(images)
+
+        # # save hidden features
+        # for idx in range(len(images)):
+        #     path, feature, label = image_paths[idx], features[idx], target[idx]
+        #     if not is_train:
+        #         path = path.replace("train", "test")
+        #     path = path.replace("imagenet", feature_dir).replace("JPEG", "pt")
+        #     os.makedirs(os.path.dirname(path), exist_ok=True)
+        #     torch.save({"feature": feature.cpu(), "label": label.cpu()}, path)
+
+        # acc1, acc5 = accuracy(output, target, topk=(1, 5))
+        acc1 = accuracy(output, target, topk=(1,))[0]
+        acc5 = torch.tensor(100)
+
+        batch_size = images.shape[0]
+        metric_logger.update(loss=loss.item())
+        metric_logger.meters['acc1'].update(acc1.item(), n=batch_size)
+        metric_logger.meters['acc5'].update(acc5.item(), n=batch_size)
+    # gather the stats from all processes
+    metric_logger.synchronize_between_processes()
+    print('* Acc@1 {top1.global_avg:.3f} Acc@5 {top5.global_avg:.3f} loss {losses.global_avg:.3f}'
+          .format(top1=metric_logger.acc1, top5=metric_logger.acc5, losses=metric_logger.loss))
+
+    # embedding visualization
+    if log_writer is not None:
+        log_writer.add_embedding(torch.cat(all_features),
+                                 torch.cat(all_labels),
+                                 torch.cat(all_images))
+
+    return {k: meter.global_avg for k, meter in metric_logger.meters.items()}
+
+
+
+
+@torch.no_grad()
+def evaluate_use_features(data_loader, model, device, log_writer, feature_dir, is_train=True):
+    criterion = torch.nn.CrossEntropyLoss()
+
+    metric_logger = misc.MetricLogger(delimiter="  ")
+    header = 'Test:'
+
+    all_features = []
+    all_labels = []
+    all_images = []
+
+    # switch to evaluation mode
+    model.eval()
+
+    for batch in metric_logger.log_every(data_loader, 10, header):
+        image_paths = batch[0]
+        images = batch[1]
+        target = batch[-1]
+        images = images.to(device, non_blocking=True)
+        target = target.to(device, non_blocking=True)
+
+        # # compute output
+        # with torch.cuda.amp.autocast():
+        #     features, output = model(images)
+        #     loss = criterion(output, target)
+        # compute output
+
+        with torch.cuda.amp.autocast():
+            output = model(images)
+            loss = criterion(output, target)
+        features = images
+
+        from PIL import Image
+        file_list = [i.replace("imagenet_features/meta_b1", "imagenet").replace("pt", "JPEG")
+                     for i in image_paths]
+        def pil_loader(path):
+            with open(path, 'rb') as f:
+                img = Image.open(f)
+                return img.convert('RGB')
+        img_list = [pil_loader(i) for i in file_list]
+        import torchvision.transforms as transforms
+        transform_val = transforms.Compose([
+            transforms.Resize(256, interpolation=3),
+            transforms.CenterCrop(224),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
+        sample_list = [transform_val(i) for i in img_list]
+        images = torch.stack(sample_list).to(device)
+
+        # embedding visualization
+        if log_writer is not None:
+            imagenet_mean = torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1)
+            imagenet_std = torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1)
+            images = images.cpu()
+            images = torch.clip((images * imagenet_std + imagenet_mean) * 255, 0, 255) / 255
+            all_features.append(features.cpu())
+            all_labels.append(target.cpu())
+            all_images.append(images)
+
+        # # save hidden features
+        # for idx in range(len(images)):
+        #     path, feature, label = image_paths[idx], features[idx], target[idx]
+        #     if not is_train:
+        #         path = path.replace("train", "test")
+        #     path = path.replace("imagenet", feature_dir).replace("JPEG", "pt")
+        #     os.makedirs(os.path.dirname(path), exist_ok=True)
+        #     torch.save({"feature": feature.cpu(), "label": label.cpu()}, path)
+
+        # acc1, acc5 = accuracy(output, target, topk=(1, 5))
+        acc1 = accuracy(output, target, topk=(1,))[0]
+        acc5 = torch.tensor(100)
+
+        batch_size = images.shape[0]
+        metric_logger.update(loss=loss.item())
+        metric_logger.meters['acc1'].update(acc1.item(), n=batch_size)
+        metric_logger.meters['acc5'].update(acc5.item(), n=batch_size)
+    # gather the stats from all processes
+    metric_logger.synchronize_between_processes()
+    print('* Acc@1 {top1.global_avg:.3f} Acc@5 {top5.global_avg:.3f} loss {losses.global_avg:.3f}'
+          .format(top1=metric_logger.acc1, top5=metric_logger.acc5, losses=metric_logger.loss))
+
+    # embedding visualization
+    if log_writer is not None:
+        log_writer.add_embedding(torch.cat(all_features),
+                                 torch.cat(all_labels),
+                                 torch.cat(all_images))
 
     return {k: meter.global_avg for k, meter in metric_logger.meters.items()}

@@ -191,22 +191,64 @@
 #    --nb_classes 2 \
 #    --input_size 32
 
-# Pretrain_mr75 with smaller path (p4_)
+## Pretrain_mr75 with smaller path (p4_)
+#python submitit_pretrain.py \
+#    --job_dir jobdir/pretrain_lung/vit_large_patch4_e800_input32_luna_mr75 \
+#    --ngpus 4 \
+#    --nodes 1 \
+#    --timeout 17280 \
+#    --batch_size 32 \
+#    --model mae_vit_large_patch4 \
+#    --norm_pix_loss \
+#    --mask_ratio 0.75 \
+#    --epochs 800 \
+#    --partition 'batch' \
+#    --warmup_epochs 40 \
+#    --blr 1.5e-4 --weight_decay 0.05 \
+#    -d lung \
+#    --input_size 32 \
+
+## Pretrain_mr75 on lung nodule only
+#python submitit_pretrain.py \
+#    --job_dir jobdir/pretrain_lung_nodule/vit_large_patch8_e2400_crop32_lung_mr75_blr1.5e4_wu500 \
+#    --ngpus 4 \
+#    --nodes 1 \
+#    --timeout 17280 \
+#    --batch_size 128 \
+#    --model mae_vit_large_patch16 \
+#    --norm_pix_loss \
+#    --epochs 2400 \
+#    --partition 'batch' \
+#    --warmup_epochs 500 \
+#    --blr 1.5e-4 --weight_decay 0.05 \
+#    -d lung_nodule \
+#    --input_size 32 \
+#    --mask_ratio 0.75
+
+# Pretrain_mr75 on lung nodule only
 python submitit_pretrain.py \
-    --job_dir jobdir/pretrain_lung/vit_large_patch4_e800_input32_luna_mr75 \
+    --job_dir jobdir/pretrain_lung_nodule/vit_large_patch8_e3600_crop32_lung_mr75_blr1.5e4_wu1000 \
     --ngpus 4 \
     --nodes 1 \
     --timeout 17280 \
-    --batch_size 32 \
-    --model mae_vit_large_patch4 \
+    --batch_size 128 \
+    --model mae_vit_large_patch16 \
     --norm_pix_loss \
-    --mask_ratio 0.75 \
-    --epochs 800 \
+    --epochs 3600 \
     --partition 'batch' \
-    --warmup_epochs 40 \
+    --warmup_epochs 1000 \
     --blr 1.5e-4 --weight_decay 0.05 \
-    -d lung \
+    -d lung_nodule \
     --input_size 32 \
+    --mask_ratio 0.75
+
+## Pretrain_mr75 on lung nodule only
+CUDA_VISIBLE_DEVICES=0,4,6,7 OMP_NUM_THREADS=1 python -m torch.distributed.launch --nproc_per_node=4 main_pretrain.py \
+    --batch_size 128 --model mae_vit_large_patch16 \
+    --resume jobdir/pretrain_lung_nodule/vit_large_patch8_e3600_crop32_lung_mr75_blr1.5e4_wu1000/checkpoint-3599.pth \
+    --epochs 3600 --blr 1.5e-4 --weight_decay 0.05 \
+    --output_dir jobdir/pretrain_lung_nodule/vit_large_patch8_e3600_crop32_lung_mr75_blr1.5e4_wu1000_debug \
+    -d lung_nodule --input_size 32 --mask_ratio 0.75 --num_workers 0
 
 
 ## Train imagenet_limit from scratch
@@ -251,8 +293,8 @@ python submitit_pretrain.py \
 #    --dist_eval --device cpu -d luna_nodule --nb_classes 2 --input_size 32
 
 
-python main_pretrain_single.py \
-    --batch_size 1 --model mae_vit_large_patch16 --resume mae_visualize_vit_large.pth \
-    --epochs 100 --blr 1.5e-4 --weight_decay 0.05 \
-    --output_dir jobdir/pretrain_imagenet_single/vit_large_patch16_e800_ft100 \
-    --data_path imagenet -d imagenet_limit --num_tr 1 --num_val 1 --nb_classes 1
+#python main_pretrain_single.py \
+#    --batch_size 1 --model mae_vit_large_patch16 --resume mae_visualize_vit_large.pth \
+#    --epochs 100 --blr 1.5e-4 --weight_decay 0.05 \
+#    --output_dir jobdir/pretrain_imagenet_single/vit_large_patch16_e800_ft100 \
+#    --data_path imagenet -d imagenet_limit --num_tr 1 --num_val 1 --nb_classes 1

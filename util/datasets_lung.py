@@ -314,8 +314,8 @@ class Methodist_nodule(Dataset):
             order: str = "zyx",
             transform: Optional[Callable] = None,
     ):
-        self.root_dir = root_dir,
-        self.label_path = label_path,
+        self.root_dir = root_dir
+        self.label_path = label_path
         self.order = order
         self.transform = transform
 
@@ -323,7 +323,7 @@ class Methodist_nodule(Dataset):
         self.labels = []
 
         label_df = pd.read_csv(self.label_path)
-        alllst = label_df['seriesuid'].tolist()
+        alllst = label_df['noduleId'].tolist()
         labellst = label_df['malignant'].tolist()  # 0: Benign, 1: Malignant
         for srsid, label in zip(alllst, labellst):
             image_path = os.path.join(self.root_dir, srsid + '.npy')
@@ -346,6 +346,70 @@ class Methodist_nodule(Dataset):
         else:
             assert split == "test"
             return image_test, label_test
+
+    def __len__(self):
+        return len(self.images_list)
+
+    def __getitem__(self, idx):
+        if torch.is_tensor(idx):
+            idx = idx.tolist()
+        img_path = self.images_list[idx]
+        image = np.load(img_path, allow_pickle=True)  # image shape == (32, 32, 32)
+        if self.order == "xyz":  # image shape == (32, 32, 32)
+            image = image.transpose((2, 1, 0))
+        label = self.labels[idx]
+        image = (image / 255.).astype(np.float16)
+        image = np.expand_dims(image, 0)
+
+        if self.transform is not None:
+            image = self.transform(image)
+
+        return image, label
+
+
+class LungBothNodule(Dataset):
+    max_nodule_size = 60
+    def __init__(
+            self,
+            luna_dir: str,
+            luna_label_path: str,
+            meth_dir: str,
+            meth_label_path: str,
+            order: str = "zyx",
+            transform: Optional[Callable] = None,
+        ):
+        self.luna_dir = luna_dir
+        self.luna_label_path = luna_label_path
+        self.meth_dir = meth_dir
+        self.meth_label_path = meth_label_path
+        self.transform = transform
+        self.order = order
+
+        self.images_list = []
+        self.labels = []
+
+        # Load luna data
+        label_df = pd.read_csv(self.luna_label_path)
+        alllst = label_df['seriesuid'].tolist()
+        labellst = label_df['malignant'].tolist()  # 0: Benign, 1: Malignant
+        for srsid, label in zip(alllst, labellst):
+            image_path = os.path.join(self.luna_dir, srsid + '.npy')
+            self.images_list.append(image_path)
+            self.labels.append(int(label))
+
+        # Load methodist data
+        label_df = pd.read_csv(self.meth_label_path)
+        alllst = label_df['noduleId'].tolist()
+        labellst = label_df['malignant'].tolist()  # 0: Benign, 1: Malignant
+        for srsid, label in zip(alllst, labellst):
+            image_path = os.path.join(self.meth_dir, srsid + '.npy')
+            self.images_list.append(image_path)
+            self.labels.append(int(label))
+
+        # Shuffle
+        xy = list(zip(self.images_list, self.labels))
+        np.random.shuffle(xy)
+        self.images_list, self.labels = zip(*xy)
 
     def __len__(self):
         return len(self.images_list)

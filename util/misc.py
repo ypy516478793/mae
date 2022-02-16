@@ -311,6 +311,25 @@ def save_model(args, epoch, model, model_without_ddp, optimizer, loss_scaler):
         client_state = {'epoch': epoch}
         model.save_checkpoint(save_dir=args.output_dir, tag="checkpoint-%s" % epoch_name, client_state=client_state)
 
+def save_model_ssl(args, epoch, model, model_without_ddp, optimizer, loss_scaler, idx=0):
+    output_dir = Path(args.output_dir)
+    epoch_name = str(epoch)
+    if loss_scaler is not None:
+        checkpoint_paths = [output_dir / ('checkpoint-%s_%d.pth' % (epoch_name, idx))]
+        for checkpoint_path in checkpoint_paths:
+            to_save = {
+                'model': model_without_ddp.state_dict(),
+                'optimizer': optimizer.state_dict(),
+                'epoch': epoch,
+                'scaler': loss_scaler.state_dict(),
+                'args': args,
+            }
+
+            save_on_master(to_save, checkpoint_path)
+    else:
+        client_state = {'epoch': epoch}
+        model.save_checkpoint(save_dir=args.output_dir, tag="checkpoint-%s_%d" % (epoch_name, idx), client_state=client_state)
+
 
 def load_model(args, model_without_ddp, optimizer, loss_scaler, start_over=False):
     if args.resume:
@@ -329,6 +348,26 @@ def load_model(args, model_without_ddp, optimizer, loss_scaler, start_over=False
                 loss_scaler.load_state_dict(checkpoint['scaler'])
             print("With optim & sched!")
 
+def initial_model_cls(args, model_cls, model_ssl):
+    # checkpoint = torch.load(args.finetune, map_location='cpu')
+
+    # print("Load pre-trained checkpoint from: %s" % args.finetune)
+    model_ssl_state_dict = model_ssl.state_dict()
+    state_dict = model_cls.state_dict()
+    for k in ['head.weight', 'head.bias']:
+        if k in model_ssl_state_dict and model_ssl_state_dict[k].shape != state_dict[k].shape:
+            print(f"Removing key {k} from pretrained checkpoint")
+            del model_ssl_state_dict[k]
+
+    # load pre-trained model
+    msg = model_cls.load_state_dict(model_ssl_state_dict, strict=False)
+    # print(msg)
+
+    # if args.global_pool:
+    #     assert set(msg.missing_keys) == {'head.0.running_mean', 'head.0.running_var', 'head.1.weight', 'head.1.bias',
+    #                                      'fc_norm.weight', 'fc_norm.bias'}
+    # else:
+    #     assert set(msg.missing_keys) == {'head.0.running_mean', 'head.0.running_var', 'head.1.weight', 'head.1.bias'}
 
 def all_reduce_mean(x):
     world_size = get_world_size()

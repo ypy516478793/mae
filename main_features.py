@@ -35,9 +35,10 @@ from util.misc import NativeScalerWithGradNormCount as NativeScaler
 from util.lars import LARS
 from util.crop import RandomResizedCrop
 
-import models_vit
+# import models_vit
+import models_vit_with_feature as models_vit
 
-from engine_finetune import train_one_epoch, evaluate
+from engine_finetune import train_one_epoch, evaluate, evaluate_with_features, evaluate_use_features
 
 
 def get_args_parser():
@@ -78,12 +79,14 @@ def get_args_parser():
     # Dataset parameters
     parser.add_argument('--data_path', default='/datasets01/imagenet_full_size/061417/', type=str,
                         help='dataset path')
+    parser.add_argument('--feature_dir', default=None, type=str,
+                        help='feature directory to save')
     parser.add_argument('--nb_classes', default=1000, type=int,
                         help='number of the classification types')
 
     parser.add_argument('--output_dir', default='./output_dir',
                         help='path where to save, empty for no saving')
-    parser.add_argument('--log_dir', default='./output_dir',
+    parser.add_argument('--log_dir', default=None,
                         help='path where to tensorboard log')
     parser.add_argument('--device', default='cuda',
                         help='device to use for training / testing')
@@ -114,7 +117,8 @@ def get_args_parser():
     # My arguments
     parser.add_argument("-d", "--datasource",
                         help="Name of the available datasets",
-                        choices=["imagenet", "imagenet_limit", "lung", "luna_nodule", "methodist_nodule"])
+                        choices=["imagenet", "imagenet_limit", "imagenet_limit_with_name", "imagenet_limit_use_features",
+                                 "lung", "luna_nodule", "methodist_nodule"])
     parser.add_argument('--num_tr', default=100, type=int)
     parser.add_argument('--num_val', default=300, type=int)
 
@@ -137,18 +141,18 @@ def main(args):
     cudnn.benchmark = True
 
     # linear probe: weak augmentation
-    transform_train = transforms.Compose([
-            RandomResizedCrop(224, interpolation=3),
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
+    # transform_train = transforms.Compose([
+    #         RandomResizedCrop(224, interpolation=3),
+    #         transforms.RandomHorizontalFlip(),
+    #         transforms.ToTensor(),
+    #         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
     transform_val = transforms.Compose([
             transforms.Resize(256, interpolation=3),
             transforms.CenterCrop(224),
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
 
-    dataset_train = build_dataset(is_train=True, transform=transform_train, args=args)
+    dataset_train = build_dataset(is_train=True, transform=transform_val, args=args)
     dataset_val = build_dataset(is_train=False, transform=transform_val, args=args)
 
     print(dataset_train)
@@ -171,10 +175,12 @@ def main(args):
         else:
             sampler_val = torch.utils.data.SequentialSampler(dataset_val)
     else:
-        sampler_train = torch.utils.data.RandomSampler(dataset_train)
+        sampler_train = torch.utils.data.SequentialSampler(dataset_train)
         sampler_val = torch.utils.data.SequentialSampler(dataset_val)
 
-    if global_rank == 0 and args.log_dir is not None and not args.eval:
+    if args.log_dir is None:
+        args.log_dir = args.output_dir
+    if global_rank == 0 and args.log_dir is not None:
         os.makedirs(args.log_dir, exist_ok=True)
         log_writer = SummaryWriter(log_dir=args.log_dir)
     else:
@@ -185,12 +191,12 @@ def main(args):
         batch_size=args.batch_size,
         num_workers=args.num_workers,
         pin_memory=args.pin_mem,
-        drop_last=True,
+        drop_last=False,
     )
 
     data_loader_val = torch.utils.data.DataLoader(
         dataset_val, sampler=sampler_val,
-        batch_size=args.batch_size,
+        batch_size=25,
         num_workers=args.num_workers,
         pin_memory=args.pin_mem,
         drop_last=False
@@ -201,7 +207,7 @@ def main(args):
         global_pool=args.global_pool,
     )
 
-    if args.finetune and not args.eval:
+    if args.finetune:
         checkpoint = torch.load(args.finetune, map_location='cpu')
 
         print("Load pre-trained checkpoint from: %s" % args.finetune)
@@ -270,8 +276,15 @@ def main(args):
     misc.load_model(args=args, model_without_ddp=model_without_ddp, optimizer=optimizer, loss_scaler=loss_scaler)
 
     if args.eval:
-        test_stats = evaluate(data_loader_val, model, device)
+        train_stats = evaluate_with_features(data_loader_train, model, device, log_writer, args.feature_dir, is_train=True)
+        print(f"Accuracy of the network on the {len(dataset_train)} test images: {train_stats['acc1']:.1f}%")
+        test_stats = evaluate_with_features(data_loader_val, model, device, None, args.feature_dir, is_train=False)
         print(f"Accuracy of the network on the {len(dataset_val)} test images: {test_stats['acc1']:.1f}%")
+
+        if args.output_dir and misc.is_main_process():
+            if log_writer is not None:
+                log_writer.flush()
+
         exit(0)
 
     print(f"Start training for {args.epochs} epochs")

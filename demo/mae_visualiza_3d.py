@@ -54,6 +54,7 @@ def run_one_image(img, model, mr=0.75):
 
     # run MAE
     loss, y, mask = model(x.float(), mask_ratio=mr)
+    print("loss is: ", loss)
     y = model.unpatchify(y)
     # y = torch.einsum('ncxyz->nxyzc', y).detach().cpu()
     y = y[:, 0].detach().cpu()  # shape == (1, 1, 32, 32, 32)
@@ -99,8 +100,8 @@ img_url = 'https://user-images.githubusercontent.com/11435359/147738734-196fd92f
 
 # scan_path = "../LUNA16/cls/crop_v5/1.3.6.1.4.1.14519.5.2.1.6279.6001.100225287222365663678666836860-111.npy"
 # scan_path = "../LUNA16/cls/crop_v6/1.3.6.1.4.1.14519.5.2.1.6279.6001.100225287222365663678666836860-111.npy"
-scan_path = "../LUNA16/cls/crop_v6/1.3.6.1.4.1.14519.5.2.1.6279.6001.108231420525711026834210228428-951.npy"
-# scan_path = "../LUNA16/cls/crop_v6/1.3.6.1.4.1.14519.5.2.1.6279.6001.100953483028192176989979435275-171.npy"
+# scan_path = "../LUNA16/cls/crop_v6/1.3.6.1.4.1.14519.5.2.1.6279.6001.108231420525711026834210228428-951.npy"
+scan_path = "../LUNA16/cls/crop_v6/1.3.6.1.4.1.14519.5.2.1.6279.6001.100953483028192176989979435275-171.npy"
 img = np.load(scan_path)
 img = np.array(img) / 255.
 
@@ -116,27 +117,31 @@ assert img.shape == (32, 32, 32)
 img = img - imagenet_mean
 img = img / imagenet_std
 
-plt.rcParams['figure.figsize'] = [5, 5]
-show_image(torch.tensor(img))
+# plt.rcParams['figure.figsize'] = [5, 5]
+# show_image(torch.tensor(img))
 
 # This is an MAE model trained with pixels as targets for visualization (ViT-Large, training mask ratio=0.75)
 
 
 mr = 0.75
 # chkpt_dir = '../mae_pretrain_vit_large.pth'
-chkpt_dir = '../jobdir/pretrain_lung_single/vit_large_patch16_e800_ft100_blr5e2_wu40/checkpoint-99.pth'
+# chkpt_dir = '../jobdir/pretrain_lung_single/vit_large_patch16_e800_ft100_blr5e2_wu40/checkpoint-99.pth'
 # chkpt_dir = '../jobdir/pretrain_lung/vit_large_patch4_e800_input32_luna_mr75/checkpoint-799.pth'
 # chkpt_dir = '../jobdir/pretrain_lung/vit_large_patch16_e800_crop32_lung/checkpoint-799.pth'
 # chkpt_dir = '../jobdir/pretrain_lung/vit_large_patch16_e800_crop32_lung_mr5/checkpoint-600.pth'
 # chkpt_dir = '../jobdir/pretrain_lung/vit_large_patch16_e800_crop32_lung_mr6/checkpoint-600.pth'
 # chkpt_dir = '../jobdir/pretrain_lung/vit_large_patch16_e800_crop32_lung_mr7/checkpoint-600.pth'
 # chkpt_dir = '../jobdir/pretrain_lung/vit_large_patch16_e800_crop32_lung_mr8/checkpoint-700.pth'
+# chkpt_dir = '../jobdir/pretrain_lung_nodule/vit_large_patch8_e800_crop32_lung_mr75/checkpoint-600.pth'
+# chkpt_dir = '../jobdir/pretrain_lung_nodule/vit_large_patch8_e2400_crop32_lung_mr75/checkpoint-2399.pth'
+# chkpt_dir = '../jobdir/pretrain_lung_nodule/vit_large_patch8_e3600_crop32_lung_mr75_blr1.5e4_wu1000/checkpoint-3599.pth'
+chkpt_dir = '../jobdir/pretrain_lung_nodule/vit_large_patch8_e3600_crop32_lung_mr75_blr1.5e4_wu1000_debug/checkpoint-10.pth'
 
 model_mae = prepare_model(chkpt_dir, 'mae_vit_large_patch16')
 # model_mae = prepare_model(chkpt_dir, 'mae_vit_large_patch4')
 print('Model loaded.')
 
 # make random mask reproducible (comment out to make it change)
-torch.manual_seed(2)
+# torch.manual_seed(2)
 print('MAE with pixel reconstruction:')
 run_one_image(img, model_mae, mr=mr)

@@ -201,3 +201,108 @@ class ImageFolder_limit(VisionDataset):
 
     def __len__(self) -> int:
         return len(self.samples)
+
+
+class ImageFolder_limit_with_name(VisionDataset):
+    """A generic data loader where the samples are arranged in this way: ::
+
+        root/class_x/xxx.ext
+        root/class_x/xxy.ext
+        root/class_x/xxz.ext
+
+        root/class_y/123.ext
+        root/class_y/nsdf3.ext
+        root/class_y/asd932_.ext
+
+    Args:
+        root (string): Root directory path.
+        loader (callable): A function to load a sample given its path.
+        extensions (tuple[string]): A list of allowed extensions.
+            both extensions and is_valid_file should not be passed.
+        transform (callable, optional): A function/transform that takes in
+            a sample and returns a transformed version.
+            E.g, ``transforms.RandomCrop`` for images.
+        target_transform (callable, optional): A function/transform that takes
+            in the target and transforms it.
+        is_valid_file (callable, optional): A function that takes path of a file
+            and check if the file is a valid file (used to check of corrupt files)
+            both extensions and is_valid_file should not be passed.
+
+     Attributes:
+        classes (list): List of the class names sorted alphabetically.
+        class_to_idx (dict): Dict with items (class_name, class_index).
+        samples (list): List of (sample path, class_index) tuples
+        targets (list): The class_index value for each image in the dataset
+    """
+
+    def __init__(
+            self,
+            root: str,
+            is_train: bool,
+            num_tr: Optional[int] = 1000,
+            num_val: Optional[int] = 300,
+            num_cls: Optional[int] = 5,
+            loader: Optional[Callable[[str], Any]] = default_loader,
+            transform: Optional[Callable] = None,
+            target_transform: Optional[Callable] = None,
+            is_valid_file: Optional[Callable[[str], bool]] = None,
+    ) -> None:
+        super(ImageFolder_limit_with_name, self).__init__(root, transform=transform,
+                                            target_transform=target_transform)
+        extensions = IMG_EXTENSIONS if is_valid_file is None else None
+        classes, class_to_idx = self._find_classes(self.root)
+        samples, new_class_to_idx = make_dataset(self.root, class_to_idx, is_train, num_tr, num_val, num_cls,
+                                                 extensions, is_valid_file)
+        classes = list(new_class_to_idx.keys()) # update classes
+        class_to_idx = new_class_to_idx # update classes_index
+        if len(samples) == 0:
+            msg = "Found 0 files in subfolders of: {}\n".format(self.root)
+            if extensions is not None:
+                msg += "Supported extensions are: {}".format(",".join(extensions))
+            raise RuntimeError(msg)
+
+        self.loader = loader
+        self.extensions = extensions
+
+        self.classes = classes
+        self.class_to_idx = class_to_idx
+        self.imgs = self.samples = samples
+        self.targets = [s[1] for s in samples]
+
+    def _find_classes(self, dir: str) -> Tuple[List[str], Dict[str, int]]:
+        """
+        Finds the class folders in a dataset.
+
+        Args:
+            dir (string): Root directory path.
+
+        Returns:
+            tuple: (classes, class_to_idx) where classes are relative to (dir), and class_to_idx is a dictionary.
+
+        Ensures:
+            No class is a subdirectory of another.
+        """
+        classes = [d.name for d in os.scandir(dir) if d.is_dir()]
+        classes.sort()
+        class_to_idx = {cls_name: i for i, cls_name in enumerate(classes)}
+        return classes, class_to_idx
+
+    def __getitem__(self, index: int) -> Tuple[Any, Any]:
+        """
+        Args:
+            index (int): Index
+
+        Returns:
+            tuple: (sample, target) where target is class_index of the target class.
+        """
+        path, target = self.samples[index]
+        sample = self.loader(path)
+        if self.transform is not None:
+            sample = self.transform(sample)
+        if self.target_transform is not None:
+            target = self.target_transform(target)
+
+        return path, sample, target
+
+    def __len__(self) -> int:
+        return len(self.samples)
